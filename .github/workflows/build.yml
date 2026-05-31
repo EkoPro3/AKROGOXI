@@ -1,0 +1,112 @@
+name: AKROGOXI Pro Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK and CMake
+        run: |
+          # التثبيت بالإصدار الدقيق المطلوب لمشروعك
+          echo "y" | sdkmanager "ndk;28.2.13676358"
+          echo "y" | sdkmanager "cmake;3.22.1"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Clean and Build APK
+        id: build
+        # أضفنا clean لحل مشاكل ملفات الـ resources التالفة
+        run: |
+          ./gradlew clean assembleDebug assembleRelease --stacktrace 2>&1 | tee build_output.txt
+          exit ${PIPESTATUS[0]}
+
+      - name: Generate Failure Report
+        if: failure()
+        run: |
+          python3 << 'EOF'
+          import os, re
+          from datetime import datetime
+
+          def read(p):
+              try:
+                  with open(p, 'r', errors='ignore') as f: return f.read()
+              except: return ""
+
+          build_log = read("build_output.txt")
+          now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+          lines = build_log.split('\n')
+          error_keywords = ['error:', 'fatal error:', 'FAILED', 'Exception', 'AAPT: error:']
+
+          errors = []
+          for i, line in enumerate(lines):
+              if any(k in line for k in error_keywords):
+                  start = max(0, i - 2)
+                  end = min(len(lines), i + 8)
+                  block = '\n'.join(lines[start:end])
+                  if block not in errors:
+                      errors.append(block)
+
+          report = []
+          report.append("=" * 70)
+          report.append("  AKROGOXI BUILD FAILURE REPORT")
+          report.append(f"  Date: {now}")
+          report.append("=" * 70)
+          
+          if errors:
+              for i, err in enumerate(errors[:15], 1):
+                  report.append(f"\n--- Error #{i} ---")
+                  report.append(err)
+
+          with open("BUILD_FAILURE_REPORT.txt", 'w') as f:
+              f.write('\n'.join(report))
+          EOF
+
+      - name: Upload Failure Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FAILURE-REPORT
+          path: BUILD_FAILURE_REPORT.txt
+
+      - name: Get version info
+        if: success()
+        id: version
+        run: |
+          echo "build_date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+
+      - name: Upload Debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AKROGOXI-Debug-${{ steps.version.outputs.build_date }}
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload Release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AKROGOXI-Release-Unsigned-${{ steps.version.outputs.build_date }}
+          path: app/build/outputs/apk/release/*.apk

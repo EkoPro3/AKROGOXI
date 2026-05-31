@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#FF3B3B</color>
+    <color name="colorPrimaryDark">#CC0000</color>
+    <color name="colorAccent">#FF6B35</color>
+    <color name="bgColor">#0D0D0D</color>
+    <color name="cardColor">#1A1A1A</color>
+    <color name="white">#FFFFFF</color>
+    <color name="gray">#888888</color>
+    <color name="telegram_blue">#2CA5E0</color>
+    <color name="success">#00C853</color>
+</resources>
